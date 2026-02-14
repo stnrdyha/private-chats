@@ -2,98 +2,222 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Private Chat Room</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Secret Chat</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        html, body { height: 100%; margin: 0; overflow: hidden; position: fixed; width: 100%; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        @keyframes blink { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+        .typing-dots span { animation: blink 1.4s infinite both; background-color: #94a3b8; width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
+        .typing-dots span:nth-child(2) { animation-delay: .2s; }
+        .typing-dots span:nth-child(3) { animation-delay: .4s; }
+    </style>
 </head>
-<body class="bg-slate-900 text-white font-sans h-screen flex flex-col">
+<body class="bg-slate-900 text-white font-sans">
 
-    <div id="setup-container" class="m-auto w-full max-w-md p-6 bg-slate-800 rounded-2xl shadow-2xl">
-        <h1 class="text-2xl font-bold mb-6 text-center text-indigo-400">Private Room</h1>
-        <div class="space-y-4">
-            <input type="text" id="username" placeholder="Nama Anda" class="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <input type="text" id="room-id" placeholder="Kode Ruangan (Contoh: Z666)" class="w-full p-3 rounded-lg bg-slate-700 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <button onclick="joinRoom()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-lg transition">Masuk Chat</button>
-        </div>
-    </div>
-
-    <div id="chat-container" class="hidden flex-col h-screen max-w-2xl mx-auto w-full border-x border-slate-700">
-        <div class="p-4 bg-slate-800 border-b border-slate-700 flex justify-between items-center">
-            <h2 class="font-bold text-indigo-400">Room: <span id="display-room"></span></h2>
-            <button onclick="location.reload()" class="text-xs bg-red-500/20 text-red-400 px-3 py-1 rounded-full hover:bg-red-500 hover:text-white transition">Hancurkan Chat</button>
-        </div>
-
-        <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900">
+    <div id="setup-container" class="flex h-screen w-full bg-slate-900 overflow-y-auto">
+        <div class="m-auto w-full max-w-md p-8 bg-slate-800 rounded-3xl shadow-2xl border border-slate-700">
+            <h1 class="text-3xl font-extrabold text-center text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400 mb-6 uppercase tracking-tighter italic">Private Chat</h1>
+            <div class="space-y-4">
+                <input type="text" id="username" placeholder="Nama Anda" class="w-full p-4 rounded-xl bg-slate-900 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                <input type="text" id="room-id" placeholder="Kode Ruangan" value="{{ initial_room }}" class="w-full p-4 rounded-xl bg-slate-900 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                <input type="password" id="room-pass" placeholder="Password Ruangan" class="w-full p-4 rounded-xl bg-slate-900 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                <button onclick="joinRoom()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg active:scale-95 uppercase tracking-widest">Masuk Chat</button>
             </div>
-
-        <div class="p-4 bg-slate-800 border-t border-slate-700 flex gap-2">
-            <input type="text" id="msg-input" placeholder="Tulis pesan..." class="flex-1 p-3 rounded-full bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <button onclick="sendMsg()" class="bg-indigo-600 p-3 rounded-full hover:bg-indigo-500 transition">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 fill-current" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-            </button>
         </div>
     </div>
+
+    <div id="chat-container" class="hidden flex flex-col h-full max-w-3xl mx-auto w-full bg-slate-900 border-x border-slate-800 overflow-hidden relative">
+        
+        <div class="flex-none p-4 bg-slate-800/80 backdrop-blur-md border-b border-slate-700 flex justify-between items-center z-10 shadow-lg">
+            <div class="flex flex-col">
+                <div class="flex items-center gap-2">
+                    <p class="text-[10px] uppercase font-bold text-slate-500 tracking-widest leading-none">Ruangan</p>
+                    <div class="flex items-center gap-1 bg-green-500/10 px-1.5 py-0.5 rounded border border-green-500/20">
+                        <span class="relative flex h-1.5 w-1.5">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+                        </span>
+                        <span id="user-count" class="text-[9px] font-bold text-green-400 uppercase">0 Aktif</span>
+                    </div>
+                </div>
+                <h2 class="font-bold text-indigo-400 text-lg leading-tight" id="display-room"></h2>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="copyRoomLink()" class="bg-slate-700 hover:bg-slate-600 text-[10px] px-3 py-2 rounded-full border border-slate-600 font-bold transition-all active:scale-90">LINK</button>
+                <button onclick="nukeRoom()" class="bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white text-[10px] px-3 py-2 rounded-full border border-red-500/20 font-bold transition-all active:scale-90 uppercase tracking-tighter">Hancurkan</button>
+            </div>
+        </div>
+
+        <div id="messages" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 min-h-0 relative">
+            <div id="typing-bubble" class="hidden flex w-full justify-start mt-2 transition-all duration-300 mb-6">
+                <div class="max-w-[120px] bg-slate-800 text-slate-200 rounded-2xl rounded-tl-none p-3 shadow-sm border border-slate-700">
+                    <p class="text-[8px] font-bold opacity-50 mb-1 uppercase tracking-tighter italic" id="typing-user-name"></p>
+                    <div class="typing-dots flex gap-1.5 items-center h-3">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-none p-4 bg-slate-800/50 border-t border-slate-700 backdrop-blur-sm">
+            <div class="flex gap-3 items-end max-w-4xl mx-auto">
+                <textarea id="msg-input" placeholder="Ketik pesan..." rows="1" class="flex-1 p-3 rounded-2xl bg-slate-900 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-white resize-none max-h-32 transition-all"></textarea>
+                <button onclick="sendMsg()" class="bg-indigo-600 p-3 rounded-2xl hover:bg-indigo-500 shadow-lg active:scale-90 mb-0.5 transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 fill-current" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 bg-green-500 text-white px-6 py-2 rounded-full text-xs font-bold shadow-xl opacity-0 transition-opacity pointer-events-none z-50">Link Disalin!</div>
 
     <script>
-        const socket = io();
-        let currentRoom = "";
-        let myUsername = "";
+        const socket = io({
+            reconnection: true,
+            reconnectionAttempts: 15, 
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000
+        });
+        const notifSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3');
+        notifSound.volume = 1;
+
+        let currentRoom = "", myUsername = "", roomPass = "", typingTimeout;
+        let lastSender = ""; 
 
         function joinRoom() {
-            myUsername = document.getElementById('username').value;
-            currentRoom = document.getElementById('room-id').value;
-
-            if (myUsername && currentRoom) {
-                document.getElementById('setup-container').classList.add('hidden');
-                document.getElementById('chat-container').classList.remove('hidden');
-                document.getElementById('display-room').innerText = currentRoom;
-                
-                socket.emit('join', {username: myUsername, room: currentRoom});
-            } else {
-                alert("Isi nama dan kode room!");
-            }
+            myUsername = document.getElementById('username').value.trim();
+            currentRoom = document.getElementById('room-id').value.trim();
+            roomPass = document.getElementById('room-pass').value.trim();
+            if (myUsername && currentRoom && roomPass) {
+                socket.emit('join', {username: myUsername, room: currentRoom, password: roomPass});
+            } else { alert("Data tidak lengkap!"); }
         }
 
-        socket.on('status', function(data) {
-            const div = document.createElement('div');
-            div.className = "text-center text-xs text-slate-500 my-2";
-            div.innerText = data.msg;
-            document.getElementById('messages').appendChild(div);
+        socket.on('connect', () => {
+            if (currentRoom && myUsername) {
+                socket.emit('join', {username: myUsername, room: currentRoom, password: roomPass});
+            }
         });
 
-        socket.on('new_message', function(data) {
-            const isMe = data.user === myUsername;
-            const msgDiv = document.createElement('div');
-            msgDiv.className = `flex ${isMe ? 'justify-end' : 'justify-start'}`;
+        socket.on('join_error', (data) => alert(data.msg));
+
+        socket.on('status', (data) => {
+            lastSender = "";
+            document.getElementById('setup-container').classList.add('hidden');
+            document.getElementById('chat-container').classList.remove('hidden');
+            document.getElementById('display-room').innerText = currentRoom;
             
-            msgDiv.innerHTML = `
-                <div class="max-w-[80%] ${isMe ? 'bg-indigo-600 rounded-l-2xl rounded-tr-2xl' : 'bg-slate-700 rounded-r-2xl rounded-tl-2xl'} p-3 shadow-md">
-                    <p class="text-[10px] opacity-50 mb-1">${data.user}</p>
-                    <p class="text-sm">${data.msg}</p>
-                </div>
-            `;
-            const container = document.getElementById('messages');
-            container.appendChild(msgDiv);
-            container.scrollTop = container.scrollHeight;
+            const div = document.createElement('div');
+            div.className = "flex justify-center my-4";
+            div.innerHTML = `<span class="bg-slate-800 text-[10px] px-4 py-1 rounded-full text-slate-500 border border-slate-700 uppercase tracking-widest">${data.msg}</span>`;
+            document.getElementById('messages').insertBefore(div, document.getElementById('typing-bubble'));
+            scrollToBottom();
+            document.getElementById('msg-input').focus();
+        });
+
+        socket.on('update_user_count', (data) => {
+            document.getElementById('user-count').innerText = `${data.count}`;
         });
 
         function sendMsg() {
-            const input = document.getElementById('msg-input');
-            if (input.value.trim() !== "") {
-                socket.emit('message', {
-                    message: input.value, 
-                    room: currentRoom, 
-                    username: myUsername
-                });
-                input.value = '';
+            const val = document.getElementById('msg-input').value.trim();
+            if (val !== "") {
+                const encrypted = CryptoJS.AES.encrypt(val, roomPass).toString();
+                socket.emit('message', { message: encrypted, room: currentRoom, user: myUsername });
+                document.getElementById('msg-input').value = '';
+                document.getElementById('msg-input').style.height = 'auto';
+                socket.emit('stop_typing', {room: currentRoom});
             }
         }
 
-        // Kirim pesan pakai tombol Enter
-        document.getElementById('msg-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMsg();
+        socket.on('new_message', (data) => {
+            let decryptedMsg = "";
+            try {
+                const bytes = CryptoJS.AES.decrypt(data.message, roomPass);
+                decryptedMsg = bytes.toString(CryptoJS.enc.Utf8);
+            } catch (e) { decryptedMsg = "[Gagal dekripsi]"; }
+
+            const isMe = data.user === myUsername;
+            if (!isMe) notifSound.play().catch(() => {});
+
+            const messagesContainer = document.getElementById('messages');
+            const bubble = document.getElementById('typing-bubble');
+            const isSameSender = (data.user === lastSender);
+            lastSender = data.user;
+
+            const div = document.createElement('div');
+            div.className = `flex w-full ${isMe ? 'justify-end' : 'justify-start'} ${isSameSender ? 'mt-1' : 'mt-4'}`;
+            
+            div.innerHTML = `
+                <div class="max-w-[85%] sm:max-w-[75%] group">
+                    <div class="${isMe ? 'bg-indigo-600 text-white rounded-2xl' : 'bg-slate-800 text-slate-200 rounded-2xl'} 
+                                ${!isSameSender ? (isMe ? 'rounded-tr-none' : 'rounded-tl-none') : ''} 
+                                p-3 shadow-md border ${isMe ? 'border-indigo-400/20' : 'border-slate-700'}">
+                        ${!isSameSender ? `<p class="text-[9px] font-black opacity-40 mb-1 uppercase tracking-tighter italic">${isMe ? 'SAYA' : data.user}</p>` : ''}
+                        <div class="flex items-end justify-between gap-4">
+                            <p class="text-sm leading-relaxed flex-1 break-words" style="white-space: pre-wrap;">${decryptedMsg || '[Pesan Kosong]'}</p>
+                            <span class="text-[8px] opacity-40 whitespace-nowrap mb-[-2px] font-mono">${data.time}</span>
+                        </div>
+                    </div>
+                </div>`;
+            
+            messagesContainer.insertBefore(div, bubble);
+            scrollToBottom();
         });
+
+        const msgIn = document.getElementById('msg-input');
+        msgIn.addEventListener('input', () => {
+            socket.emit('typing', {username: myUsername, room: currentRoom});
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => socket.emit('stop_typing', {room: currentRoom}), 2500);
+        });
+
+        socket.on('display_typing', (d) => {
+            document.getElementById('typing-user-name').innerText = d.username;
+            document.getElementById('typing-bubble').classList.remove('hidden', 'opacity-0');
+            scrollToBottom();
+        });
+
+        socket.on('hide_typing', () => {
+            document.getElementById('typing-bubble').classList.add('opacity-0');
+            setTimeout(() => document.getElementById('typing-bubble').classList.add('hidden'), 300);
+        });
+
+        msgIn.addEventListener('keydown', (e) => { 
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); sendMsg(); }
+        });
+
+        function scrollToBottom() { 
+            const c = document.getElementById('messages'); 
+            c.scrollTo({ top: c.scrollHeight, behavior: 'smooth' }); 
+        }
+
+        function copyRoomLink() {
+            const link = window.location.origin + window.location.pathname + '?room=' + encodeURIComponent(currentRoom);
+            navigator.clipboard.writeText(link).then(() => {
+                const t = document.getElementById('toast'); 
+                t.classList.remove('opacity-0');
+                setTimeout(() => t.classList.add('opacity-0'), 2500);
+            });
+        }
+      
+        socket.on('force_nuke', () => {
+            alert("⚠️ Ruangan dihancurkan secara permanen.");
+            location.reload(); 
+        });
+
+        function nukeRoom() {
+            if (confirm("Hancurkan seluruh chat sekarang?")) {
+                socket.emit('nuke_room_request', {room: currentRoom});
+            }
+        }
     </script>
 </body>
 </html>
